@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>로켓 비행 시뮬레이션</title>
+<style>
+:root{color-scheme:dark;--bg:#08111f;--panel:#111f33;--line:#263b56;--text:#eaf2ff;--muted:#a8bad1;--accent:#68c7ff}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#07101d,#101d31);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Noto Sans KR",sans-serif}
+main{max-width:1120px;margin:auto;padding:24px 16px 40px}h1{margin:0 0 6px;font-size:clamp(24px,4vw,34px)}.sub{color:var(--muted);margin:0 0 20px}
+.layout{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:16px}.panel{background:#101e31;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 10px 30px #0003}
+canvas{width:100%;height:auto;display:block;border-radius:12px;background:#091626}.controls{display:grid;grid-template-columns:1fr 1fr;gap:14px}.control{min-width:0}.control label{display:flex;justify-content:space-between;gap:8px;font-weight:600}.control output{color:var(--accent);font-variant-numeric:tabular-nums}.field-row{display:grid;grid-template-columns:minmax(0,1fr) 94px;gap:9px;align-items:center}.field-row input[type=range]{width:100%;accent-color:var(--accent);margin:10px 0 0}.field-row input[type=number]{width:100%;min-width:0;background:#091626;color:var(--text);border:1px solid #38516f;border-radius:8px;padding:7px;font:inherit;font-variant-numeric:tabular-nums}.hint{font-size:12px;color:var(--muted);margin-top:3px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}button{border:0;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer;background:var(--accent);color:#07111e}button.secondary{background:#263b56;color:var(--text)}button:disabled{opacity:.5;cursor:not-allowed}
+.calculator{margin-top:16px;padding:14px;background:#0b1728;border:1px solid #20334b;border-radius:12px}.calculator h3{margin:0 0 6px;font-size:16px}.calc-result{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid #20334b;color:var(--muted);font-size:13px}.calc-result strong{color:var(--accent);font-size:16px;font-variant-numeric:tabular-nums}.calculator button{margin-top:8px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:14px}.stat{background:#0b1728;border:1px solid #20334b;border-radius:10px;padding:10px}.stat small{display:block;color:var(--muted);font-size:12px}.stat strong{font-size:18px;font-variant-numeric:tabular-nums}.note{color:var(--muted);font-size:12px;margin:14px 2px 0}.status{color:var(--accent);font-weight:700;margin-top:10px;min-height:24px}
+@media(max-width:800px){.layout{grid-template-columns:1fr}}@media(max-width:480px){.controls{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<main>
+<h1>로켓 비행 시뮬레이션</h1>
+<p class="sub">블랙 브랜트 V의 공개 제원을 참고한 교육용 단순화 모델 · 시뮬레이션 배속 0.01~100배속</p>
+<div class="layout">
+<section class="panel">
+<canvas id="flight" width="900" height="560" aria-label="로켓 비행 애니메이션"></canvas>
+<div class="stats">
+ <div class="stat"><small>비행 시간</small><strong id="time">0.0 s</strong></div>
+ <div class="stat"><small>최고 속도</small><strong id="maxspeed">0.0 m/s</strong></div>
+ <div class="stat"><small>고도</small><strong id="alt">0 m</strong></div>
+ <div class="stat"><small>수평 비행거리</small><strong id="dist">0 m</strong></div>
+ <div class="stat"><small>최고 고도</small><strong id="maxalt">0 m</strong></div>
+ <div class="stat"><small>추정 에너지 효율</small><strong id="eff">0.0%</strong></div>
+</div>
+<div class="status" id="status">발사 준비 완료</div>
+</section>
+<aside class="panel">
+<h2 style="margin:0 0 14px;font-size:19px">발사 조건 설정</h2><p class="hint" style="margin:-8px 0 12px">슬라이더를 움직이거나 오른쪽 칸에 숫자를 직접 입력할 수 있어.</p>
+<div class="controls">
+ <div class="control"><label for="angle">발사각 <output id="angleV">85°</output></label><div class="field-row"><input id="angle" type="range" min="0" max="90" step="1" value="85"><input id="angleNum" type="number" min="0" max="90" step="1" value="85" aria-label="angle 숫자 입력"></div></div>
+ <div class="control"><label for="wind">수평 풍속 <output id="windV">0 m/s</output></label><div class="field-row"><input id="wind" type="range" min="-20" max="20" step="1" value="0"><input id="windNum" type="number" min="-20" max="20" step="1" value="0" aria-label="wind 숫자 입력"></div><div class="hint">음수: 왼쪽 바람 / 양수: 오른쪽 바람</div></div>
+ <div class="control"><label for="thrust">평균 추력 <output id="thrustV">90,000 N</output></label><div class="field-row"><input id="thrust" type="range" min="10000" max="110000" step="1000" value="90000"><input id="thrustNum" type="number" min="10000" max="110000" step="1000" value="90000" aria-label="thrust 숫자 입력"></div></div>
+ <div class="control"><label for="prop">추진제 질량 <output id="propV">1,000 kg</output></label><div class="field-row"><input id="prop" type="range" min="700" max="1100" step="10" value="1000"><input id="propNum" type="number" min="700" max="1100" step="10" value="1000" aria-label="prop 숫자 입력"></div></div>
+ <div class="control"><label for="dry">건조 질량 <output id="dryV">400 kg</output></label><div class="field-row"><input id="dry" type="range" min="200" max="600" step="10" value="400"><input id="dryNum" type="number" min="200" max="600" step="10" value="400" aria-label="dry 숫자 입력"></div></div>
+ <div class="control"><label for="cd">항력 계수(Cd) <output id="cdV">0.30</output></label><div class="field-row"><input id="cd" type="range" min="0" max="1" step="0.01" value="0.30"><input id="cdNum" type="number" min="0" max="1" step="0.01" value="0.30" aria-label="cd 숫자 입력"></div><div class="hint">0을 선택하면 공기 저항을 적용하지 않음</div></div>
+ <div class="control"><label for="speedMult">시뮬레이션 배속 <output id="speedMultV">100.00배속</output></label><div class="field-row"><input id="speedMult" type="range" min="0.01" max="100" step="0.01" value="100"><input id="speedMultNum" type="number" min="0.01" max="100" step="0.01" value="100" aria-label="speedMult 숫자 입력"></div><div class="hint">0.01배속부터 100배속까지 조절</div></div>
+</div>
+
+<div class="calculator">
+ <h3>초기 속도</h3>
+ <div class="calc-result"><span>초기 속도 (연소 종료 직후 · 공기 저항 0)</span><strong id="calcSpeed">0.0 m/s</strong></div>
+</div>
+<div class="actions"><button id="launch">발사</button><button class="secondary" id="pause">일시 정지</button><button class="secondary" id="reset">초기화</button></div>
+
+</aside>
+</div>
+<p class="note">표시 초기 속도는 추진제 연소가 끝나는 순간의 속도야. 공기 저항과 바람은 0으로 두고, 치올콥스키 로켓 방정식과 연소 중 중력 손실을 반영해 계산해. 이 속도를 연소 종료 후 포물선 운동의 초기 속도로 사용할 수 있어. 실제 비행 애니메이션에는 설정한 항력 계수와 바람이 적용돼. 모델 참고: Black Brant V 과학관측 로켓. 질량·추력·연소 시간 등은 교육용 근사값이며 실제 비행 성능을 정확히 재현하지 않아. 에너지 효율은 추진제 화학 에너지 대비 로켓의 역학적 에너지로 계산한 추정치야.</p>
+</main>
+<script>
+(()=>{
+const $=id=>document.getElementById(id),canvas=$('flight'),ctx=canvas.getContext('2d');
+const G=9.80665,RE=6371000,DT=.01,AREA=.152,RHO0=1.225;
+let s=null,raf=0,last=0,acc=0,active=false,paused=false;
+const inputs=['angle','wind','thrust','prop','dry','cd','speedMult'];
+function params(){return {angle:+$('angle').value,wind:+$('wind').value,thrust:+$('thrust').value,prop:+$('prop').value,dry:+$('dry').value,cd:+$('cd').value,speedMult:+$('speedMult').value};}
+function updateLabels(){const p=params();$('angleV').textContent=p.angle+'°';$('windV').textContent=p.wind+' m/s';$('thrustV').textContent=p.thrust.toLocaleString('en-US')+' N';$('propV').textContent=p.prop.toLocaleString('en-US')+' kg';$('dryV').textContent=p.dry+' kg';$('cdV').textContent=p.cd.toFixed(2);$('speedMultV').textContent=p.speedMult.toFixed(2)+'배속';}
+function clampInput(id,value){
+ const el=$(id),num=$(id+'Num');let v=Number(value);
+ if(!Number.isFinite(v))v=Number(el.value);
+ v=Math.min(Number(el.max),Math.max(Number(el.min),v));
+ const step=Number(el.step);
+ if(step>0){const decimals=(String(el.step).split('.')[1]||'').length;v=Number((Math.round(v/step)*step).toFixed(decimals));}
+ el.value=String(v);num.value=String(v);updateLabels();return v;
+}
+inputs.forEach(id=>{
+ $(id).addEventListener('input',e=>{clampInput(id,e.target.value);if(!active)updateIdealInitialSpeed();if(s&&!active&&!paused)render();});
+ $(id+'Num').addEventListener('change',e=>{clampInput(id,e.target.value);if(!active)updateIdealInitialSpeed();if(s&&!active&&!paused)render();});
+});
+updateLabels();
+
+function updateIdealInitialSpeed(){
+ const p=params(),g0=G,isp=250;
+ const exhaustVelocity=isp*g0;
+ const initialMass=p.dry+p.prop,finalMass=p.dry;
+ const massFlow=p.thrust/exhaustVelocity;
+ const burnTime=p.prop/massFlow;
+ const idealDeltaV=exhaustVelocity*Math.log(initialMass/finalMass);
+ const a=p.angle*Math.PI/180;
+ const vx=idealDeltaV*Math.cos(a);
+ const vy=idealDeltaV*Math.sin(a)-g0*burnTime;
+ $('calcSpeed').textContent=Math.hypot(vx,vy).toFixed(1)+' m/s';
+}
+function reset(){cancelAnimationFrame(raf);active=false;paused=false;acc=0;const p=params();s={x:0,y:0,vx:0,vy:0,t:0,m:p.dry+p.prop,fuel:p.prop,burn:p.prop/(p.thrust/(250*G)),maxY:0,maxSpeed:0,done:false};updateIdealInitialSpeed();$('status').textContent='발사 준비 완료';$('pause').textContent='일시 정지';render();}
+function gravity(y){return G*Math.pow(RE/(RE+Math.max(0,y)),2);}
+function step(){
+ if(!s||s.done)return;
+ const p=params(),mdot=p.thrust/(250*G);
+ function integrateActual(dt,thrustOn,mass){
+  if(dt<=0)return;
+  const rho=RHO0*Math.exp(-Math.max(0,s.y)/8500);
+  let ax=0,ay=0;
+  if(p.cd>0){
+   const rvx=s.vx-p.wind,rvy=s.vy,rv=Math.hypot(rvx,rvy);
+   if(rv>0.0001){const drag=.5*rho*p.cd*AREA*rv*rv;ax-=drag/mass*(rvx/rv);ay-=drag/mass*(rvy/rv);}
+  }
+  if(thrustOn){const a=p.angle*Math.PI/180;ax+=p.thrust*Math.cos(a)/mass;ay+=p.thrust*Math.sin(a)/mass;}
+  ay-=gravity(s.y);
+  s.vx+=ax*dt;s.vy+=ay*dt;s.x+=s.vx*dt;s.y+=s.vy*dt;
+ }
+ if(s.fuel>0){
+  const oldMass=s.m,used=Math.min(s.fuel,mdot*DT),burnDt=used/mdot;
+  const midMass=oldMass-used/2;
+  integrateActual(burnDt,true,midMass);
+  
+  s.fuel=Math.max(0,s.fuel-used);s.m=Math.max(p.dry,s.m-used);
+  
+  if(s.fuel<=1e-9){s.fuel=0;$('status').textContent='연소 종료 · 이후 관성 비행';}
+  integrateActual(Math.max(0,DT-burnDt),false,s.m);
+ }else{
+  integrateActual(DT,false,s.m);
+  
+ }
+ s.t+=DT;
+ const measuredSpeed=Math.hypot(s.vx,s.vy);
+ s.maxY=Math.max(s.maxY,s.y);s.maxSpeed=Math.max(s.maxSpeed,measuredSpeed);
+ if(s.t>0.2&&s.y<=0&&s.vy<0){s.y=0;s.done=true;active=false;$('status').textContent='비행 종료';}
+ if(s.t>900){s.done=true;active=false;$('status').textContent='시뮬레이션 시간 제한으로 종료';}
+}
+function metrics(){if(!s)return;const speed=Math.hypot(s.vx,s.vy),chem=s.fuel+s.m-s.m;const p=params();const totalChem=p.prop*3e6;const mech=.5*s.m*speed*speed+s.m*G*s.y;const eff=Math.max(0,Math.min(100,mech/totalChem*100));$('time').textContent=s.t.toFixed(1)+' s';$('maxspeed').textContent=s.maxSpeed.toFixed(1)+' m/s';$('alt').textContent=Math.max(0,s.y).toFixed(0)+' m';$('dist').textContent=Math.abs(s.x).toFixed(0)+' m';$('maxalt').textContent=s.maxY.toFixed(0)+' m';$('eff').textContent=eff.toFixed(2)+'%';
+}
+function drawBackground(){const h=Math.max(0,s?.y||0),space=Math.min(1,Math.max(0,(h-30000)/50000));const grad=ctx.createLinearGradient(0,0,0,560);grad.addColorStop(0,`rgb(${Math.round(7+10*space)},${Math.round(22+8*space)},${Math.round(48+35*space)})`);grad.addColorStop(1,`rgb(${Math.round(22-14*space)},${Math.round(75-48*space)},${Math.round(105-50*space)})`);ctx.fillStyle=grad;ctx.fillRect(0,0,900,560);
+ if(space>.1){ctx.fillStyle='#fff';for(let i=0;i<75;i++){const x=(i*137)%900,y=(i*71)%400;ctx.globalAlpha=space*.8;ctx.fillRect(x,y,1.5,1.5);}ctx.globalAlpha=1;}
+ ctx.fillStyle=space>.7?'#101b2a':'#182c2c';ctx.fillRect(0,520,900,40);ctx.fillStyle='#4c7554';ctx.fillRect(0,520,900,5);
+}
+function render(){drawBackground();const p=params();let px=90,py=515;
+ if(s){const scale=Math.min(0.16,420/Math.max(3000,s.maxY*1.15+1000));px=90+s.x*scale;py=515-s.y*scale;px=Math.max(45,Math.min(855,px));py=Math.max(55,Math.min(510,py));}
+ ctx.save();ctx.translate(px,py);let ang=s?Math.atan2(s.vy,s.vx):p.angle*Math.PI/180; if(!s||Math.hypot(s.vx,s.vy)<1)ang=p.angle*Math.PI/180;ctx.rotate(-ang);
+ ctx.fillStyle='#d9e5f3';ctx.beginPath();ctx.moveTo(25,0);ctx.lineTo(5,-7);ctx.lineTo(-20,-7);ctx.lineTo(-25,0);ctx.lineTo(-20,7);ctx.lineTo(5,7);ctx.closePath();ctx.fill();ctx.fillStyle='#f05b45';ctx.beginPath();ctx.moveTo(-12,-7);ctx.lineTo(-22,-15);ctx.lineTo(-18,-7);ctx.moveTo(-12,7);ctx.lineTo(-22,15);ctx.lineTo(-18,7);ctx.fill();if(s&&s.fuel>0&&!s.done){ctx.fillStyle='#ffb347';ctx.beginPath();ctx.moveTo(-25,-4);ctx.lineTo(-42,0);ctx.lineTo(-25,4);ctx.fill();}ctx.restore();
+ ctx.fillStyle='#eaf2ff';ctx.font='14px system-ui';ctx.fillText(`고도 ${(s?Math.max(0,s.y):0).toFixed(0)} m`,18,28);ctx.fillText(`풍속 ${p.wind} m/s · Cd ${p.cd.toFixed(2)}`,18,50);metrics();}
+function frame(now){if(!active)return;const elapsed=Math.min(.05,(now-last)/1000||0);last=now;acc+=elapsed*params().speedMult;let n=0;while(acc>=DT&&n<600&&active){step();acc-=DT;n++;}render();if(active)raf=requestAnimationFrame(frame);}
+$('launch').addEventListener('click',()=>{if(!s||s.done)reset();if(active)return;active=true;paused=false;$('status').textContent='비행 중 · '+params().speedMult.toFixed(2)+'배속';last=performance.now();raf=requestAnimationFrame(frame);});
+$('pause').addEventListener('click',()=>{if(!s||s.done)return;if(active){active=false;paused=true;cancelAnimationFrame(raf);$('pause').textContent='계속';$('status').textContent='일시 정지';}else if(paused){active=true;paused=false;$('pause').textContent='일시 정지';$('status').textContent='비행 중 · '+params().speedMult.toFixed(2)+'배속';last=performance.now();raf=requestAnimationFrame(frame);}});
+$('reset').addEventListener('click',reset);
+reset();
+})();
+</script>
+</body>
+</html>
